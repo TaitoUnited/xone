@@ -73,6 +73,10 @@ static char override_mac[ETH_ALEN] = { 0 };
 module_param_array(override_mac, byte, NULL, 0444);
 MODULE_PARM_DESC(override_mac, "Override MAC address (6 bytes), helps deconflict counterfeit adapters");
 
+static uint fixed_channel;
+module_param_named(channel, fixed_channel, uint, 0444);
+MODULE_PARM_DESC(channel, "Run the adapter on this channel, such as 36, instead of the one with the highest transmit power");
+
 static u32 xone_mt76_read_register(struct xone_mt76 *mt, u32 addr)
 {
 	u8 req = MT_VEND_MULTI_READ;
@@ -662,10 +666,11 @@ static int xone_mt76_get_channel_power(struct xone_mt76 *mt,
 
 static int xone_mt76_evaluate_channels(struct xone_mt76 *mt)
 {
-	struct xone_mt76_channel *chan;
+	struct xone_mt76_channel *chan, *fixed = NULL;
 	int i, err, pow = 0;
 
 	mt->channel = NULL;
+	mt->channel_fixed = false;
 
 	memcpy(mt->channels, xone_mt76_channels, sizeof(xone_mt76_channels));
 
@@ -690,6 +695,19 @@ static int xone_mt76_evaluate_channels(struct xone_mt76 *mt)
 
 		dev_dbg(mt->dev, "%s: channel=%u, power=%u\n", __func__,
 			chan->index, chan->power);
+
+		if (fixed_channel && chan->index == fixed_channel)
+			fixed = chan;
+	}
+
+	if (fixed) {
+		mt->channel = fixed;
+		mt->channel_fixed = true;
+		dev_info(mt->dev, "%s: channel=%u, set by the channel option\n",
+			 __func__, fixed->index);
+	} else if (fixed_channel) {
+		dev_warn(mt->dev, "%s: channel option %u is not one of the adapter's channels\n",
+			 __func__, fixed_channel);
 	}
 
 	if (mt->channel == NULL)

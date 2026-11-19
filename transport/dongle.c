@@ -32,6 +32,7 @@ module_param_named(fw_override, fw_override_pid, ushort, 0600);
 
 #define XONE_DONGLE_PAIRING_TIMEOUT 60 // seconds
 #define XONE_DONGLE_PAIR_SCAN_INTERVAL msecs_to_jiffies(2000)
+#define XONE_DONGLE_STALE_CLIENT msecs_to_jiffies(1000)
 #define XONE_DONGLE_PWR_OFF_TIMEOUT msecs_to_jiffies(5000)
 #define XONE_DONGLE_FW_REQ_TIMEOUT_MS 3000
 #define XONE_DONGLE_FW_REQ_RETRIES 11 // 30 seconds
@@ -59,6 +60,7 @@ struct xone_dongle_client {
 	u8 wcid;
 	u8 address[ETH_ALEN];
 	bool encryption_enabled;
+	unsigned long last_rx;
 
 	struct gip_adapter *adapter;
 };
@@ -332,7 +334,7 @@ static void xone_dongle_pairing_scan(struct work_struct *work)
 
 	mutex_lock(&dongle->pairing_lock);
 
-	if (!dongle->pairing)
+	if (!dongle->pairing || dongle->mt.channel_fixed)
 		goto out_unlock;
 
 	/*
@@ -499,6 +501,7 @@ xone_dongle_create_client(struct xone_dongle *dongle, u8 *addr)
 
 	client->dongle = dongle;
 	client->wcid = i + 1;
+	client->last_rx = jiffies;
 	memcpy(client->address, addr, ETH_ALEN);
 
 	client->adapter = gip_create_adapter(dongle->mt.dev,
@@ -514,17 +517,33 @@ xone_dongle_create_client(struct xone_dongle *dongle, u8 *addr)
 	return client;
 }
 
+static int xone_dongle_remove_client(struct xone_dongle *dongle, u8 wcid);
+
 static int xone_dongle_add_client(struct xone_dongle *dongle, u8 *addr)
 {
 	struct xone_dongle_client *client;
 	int i, err;
 	unsigned long flags;
 
-	/* reject duplicate: controller already has a WCID slot */
-	for (i = 0; i < XONE_DONGLE_MAX_CLIENTS; i++)
-		if (dongle->clients[i] &&
-		    ether_addr_equal(dongle->clients[i]->address, addr))
+	/*
+	 * A controller that asks to join while it holds a slot has lost its
+	 * connection without a word, unless it sent data within the last
+	 * second. Left alone, its dead slot keeps it from joining again.
+	 */
+	for (i = 0; i < XONE_DONGLE_MAX_CLIENTS; i++) {
+		client = dongle->clients[i];
+		if (!client || !ether_addr_equal(client->address, addr))
+			continue;
+
+		if (time_before(jiffies,
+				client->last_rx + XONE_DONGLE_STALE_CLIENT))
 			return 0;
+
+		dev_dbg(dongle->mt.dev, "%s: replacing stale wcid=%d, address=%pM\n",
+			__func__, client->wcid, addr);
+		xone_dongle_remove_client(dongle, client->wcid);
+		break;
+	}
 
 	client = xone_dongle_create_client(dongle, addr);
 	if (IS_ERR(client))
@@ -565,8 +584,12 @@ static int xone_dongle_remove_client(struct xone_dongle *dongle, u8 wcid)
 	unsigned long flags;
 
 	client = dongle->clients[wcid - 1];
-	if (!client)
-		return 0;
+	if (!client) {
+		/* the adapter can keep reporting a slot xone holds no client in */
+		dev_dbg(dongle->mt.dev, "%s: freeing empty wcid=%d\n",
+			__func__, wcid);
+		return xone_mt76_remove_client(&dongle->mt, wcid);
+	}
 
 	dev_dbg(dongle->mt.dev, "%s: wcid=%d, address=%pM\n",
 		__func__, wcid, client->address);
@@ -703,6 +726,7 @@ static int xone_dongle_handle_qos_data(struct xone_dongle *dongle,
 
 	client = dongle->clients[wcid - 1];
 	if (client) {
+		client->last_rx = jiffies;
 		/*
 		 * Active data traffic is the strongest signal that we are on
 		 * the right channel. Refresh last_wlan_rx so the pairing scan

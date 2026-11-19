@@ -455,8 +455,9 @@ static int gip_acknowledge_pkt(struct gip_client *client,
 	if ((ack->options & GIP_OPT_CHUNK) && buf)
 		pkt.remaining = cpu_to_le16(buf->length - len);
 
-	// gip_dbg(client, "%s: ACME(host) command=0x%02x, length=0x%04x\n",
-	// 	__func__, pkt.command, len);
+	if (ack->options & GIP_OPT_CHUNK)
+		gip_dbg(client, "%s: command=0x%02x, length=0x%04x, remaining=0x%04x\n",
+			__func__, pkt.command, len, le16_to_cpu(pkt.remaining));
 
 	return gip_send_pkt(client, &hdr, &pkt);
 }
