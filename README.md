@@ -1,5 +1,30 @@
+# xone for the Taito United Oy office Steam Machine
+
+The Taito United Oy office has a Steam Machine running SteamOS on its TV, where people play Super
+Smash Bros. Melee through Slippi. The couch is too far from the TV for cables and the Steam
+Controller does not suit Melee, so the office plays with four Xbox One controllers through an Xbox
+Wireless Adapter (the original model, USB ID 045e:02e6) and this driver.
+
+The controllers kept disconnecting. One of them, a Model 1708 on controller firmware 5.23.6.0,
+failed the driver's authentication handshake with the adapter in 15 of 17 tries. A failure could
+leave the adapter holding a slot the driver had already freed; the adapter then kept reporting a
+lost controller in that slot until it dropped off USB, which disconnected every controller. xone is
+no longer maintained, so the fix lives here (https://github.com/TaitoUnited/xone/pull/1). It:
+
+- frees an adapter slot even when the driver holds no controller in it, so the lost-controller
+  reports stop;
+- gives a controller a new slot when it rejoins while its old slot has been silent for over a
+  second;
+- adds the `xone_dongle` option `channel=`, such as `channel=36`, to run the adapter on 5 GHz
+  instead of channel 1;
+- logs each certificate chunk the driver acknowledges, at debug level.
+
+The Steam Machine builds it from the Arch User Repository's `xone-dkms` 0.5.8 with this patch
+added. The driver's files are in `src/`, where upstream keeps them at the root. The rest of this
+README is upstream's.
+
 <p align="center">
-    <img src="logo.svg" alt="Logo" width="200">
+    <img src="src/logo.svg" alt="Logo" width="200">
 </p>
 
 <p align="center">
