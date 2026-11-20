@@ -3,10 +3,9 @@
 </p>
 
 The Taito United Oy office plays Super Smash Bros. Melee on a Steam Machine with four Xbox One
-controllers on an Xbox Wireless Adapter, since the couch is too far from the TV for cables and the
-Steam Controller does not suit Melee. The pads kept dropping: one on newer firmware failed its
+controllers on an Xbox Wireless Adapter. The pads kept dropping: one on newer firmware failed its
 handshake in 15 of 17 tries, the adapter kept slots the driver had freed, and in the end it fell off
-USB and took every pad with it. xone is no longer maintained, so this copy
+USB and took every pad with it. Upstream xone does not have these fixes, so this copy
 (https://github.com/TaitoUnited/xone/pull/1):
 
 - frees adapter slots the driver no longer holds;
