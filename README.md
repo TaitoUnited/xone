@@ -1,18 +1,23 @@
 <p align="center">
-  <img src="src/banner.svg" alt="xone for the office Steam Machine: no more dropped pads on the Melee couch" width="100%">
+  <img src="src/banner.svg" alt="xone, without the pad drops: first fixed on the office Melee couch" width="100%">
 </p>
 
-The Taito United Oy office plays Super Smash Bros. Melee on a Steam Machine with four Xbox One
-controllers on an Xbox Wireless Adapter. One pad, a Model 1708 on controller firmware 5.23.6.0 from
-March 2025, failed its security handshake in 15 of 17 tries, and a failure could leave the adapter
-holding a slot until it fell off USB and dropped every pad. Upstream xone is no longer maintained, so
-this copy:
+[xone](https://github.com/dlundqvist/xone) is the Linux driver for Xbox One and Xbox Series X|S
+pads on the Xbox Wireless Adapter. When a pad fails its security handshake, xone can leave the pad's
+slot on the adapter stuck, so the pad cannot join again
+([issue 210](https://github.com/dlundqvist/xone/issues/210)), and upstream is no longer
+maintained. This copy:
 
 - frees adapter slots the driver no longer holds and gives a rejoining pad a fresh one;
-- adds the option `channel=` to move the adapter off 2.4 GHz channel 1;
+- adds the option `channel=` to pick the adapter's channel, such as 36 in place of 2.4 GHz
+  channel 1;
 - logs each certificate chunk it acknowledges.
 
-On 23 November 2026, after this copy went in, that pad joined 13 times without a failed handshake.
+It started at the Taito United Oy office, which plays Super Smash Bros. Melee on a Steam Machine
+with four Xbox One controllers on an Xbox Wireless Adapter. One pad, a Model 1708 on controller
+firmware 5.23.6.0 from March 2025, failed its handshake in 15 of 17 tries, and the stuck slots
+ended with the adapter falling off USB and every pad dropping. On 23 November 2026, after this copy
+went in, that pad joined 13 times without a failed handshake.
 
 ## Why the pad failed
 
@@ -45,12 +50,29 @@ the pad on the newer firmware is the one that failed.
 
 ## Try it
 
-Paste this into Claude Code on the machine with the adapter:
+On the machine with the adapter, paste this into Claude Code:
 
 ```text
 clone github.com/TaitoUnited/xone, install the xone driver from its src folder as src/README.md
 says, and load xone_dongle with the option channel=36
 ```
+
+The office Steam Machine has no Claude Code: it runs SteamOS in Gaming Mode, so a USB stick named
+`SHARE` carries the work there and back.
+
+1. Claude Code on another computer writes scripts to the stick: the standing ones in `commands/`
+   and one-time jobs in `run/`.
+2. In Desktop Mode, `commands/setup.sh` copies the scripts into the home folder, which SteamOS
+   updates keep, and adds **Fix Xbox controllers** to the Steam library.
+3. In Gaming Mode, **Fix Xbox controllers** runs in Konsole. With the stick in, it takes the newer
+   scripts from `commands/`, runs each job in `run/` once and moves it to `run/done/` with its
+   output. It then reports the pads that dropped, builds xone with this patch again after a
+   SteamOS update, checks the adapter and closes by itself. When it needs the deck password,
+   Steam's on-screen keyboard opens, so a pad can type it.
+4. Each run saves its reports to `steambox-info/` on the stick, which goes back to the computer
+   with Claude Code to be read.
+
+The stick's scripts are not in this repository.
 
 ## The C changes
 
@@ -151,10 +173,17 @@ if (fixed) {
 [`src/transport/mt76.h`](src/transport/mt76.h):
 
 ```c
-bool channel_fixed;
+struct xone_mt76 {
+	/* ... */
+	struct xone_mt76_channel channels[XONE_MT_NUM_CHANNELS];
+	struct xone_mt76_channel *channel;
+	bool channel_fixed;
+};
 ```
 
 ## License
 
-Code in [`src/`](src): `GPL-2.0-or-later`. This README and the banner: `CC-BY-SA-4.0`
-([LICENSE-PROSE](LICENSE-PROSE)).
+Code in [`src/`](src): `GPL-2.0-or-later`, as upstream's. A kernel module has to declare a
+GPL-compatible license for the kernel to link it to the USB functions it needs
+([license rules](https://docs.kernel.org/process/license-rules.html)). This README and the banner:
+`CC-BY-SA-4.0` ([LICENSE-PROSE](LICENSE-PROSE)).
