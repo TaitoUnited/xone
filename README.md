@@ -34,8 +34,8 @@ on 21 December 2025 and pointed to the fork dlundqvist/xone
 That fork's README has said since 15 November 2026 that it is no longer actively maintained as of
 July 2026, and asks for someone to take it over ([README](https://github.com/dlundqvist/xone)).
 Neither README gives a reason. Tomasz Pakuła, who merged the fork's last code changes in March 2026,
-wrote in its [PR 234](https://github.com/dlundqvist/xone/pull/234) that he is no longer a
-maintainer and has no Xbox hardware left to test with.
+wrote in its [PR 234](https://github.com/dlundqvist/xone/pull/234) that they are no longer a
+maintainer and have no Xbox hardware left to test with.
 
 **Try it.** Paste this into Claude Code on the machine with the adapter:
 
