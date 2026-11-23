@@ -218,5 +218,5 @@ says, and load xone_dongle with the option channel=36
 
 </details>
 
-The code and upstream's README are in [`src/`](src), under `GPL-2.0-or-later`; this README and the
-banner are under `CC-BY-SA-4.0` ([LICENSE-PROSE](LICENSE-PROSE)).
+Code in [`src/`](src): `GPL-2.0-or-later`. This README and the banner: `CC-BY-SA-4.0`
+([LICENSE-PROSE](LICENSE-PROSE)).
