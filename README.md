@@ -53,18 +53,18 @@ the pad on the newer firmware is the one that failed.
 On the machine with the adapter, paste this into Claude Code:
 
 ```text
-clone github.com/TaitoUnited/xone, install the xone driver from its src folder as src/README.md
-says, and load xone_dongle with the option channel=36
+clone github.com/TaitoUnited/xone, install the xone driver from its src/xone folder as
+src/xone/README.md says, and load xone_dongle with the option channel=36
 ```
 
 The office Steam Machine has no Claude Code: it runs SteamOS in Gaming Mode, so a USB stick named
 `SHARE` carries the work there and back. The scripts it carries are in
-[`stick/commands/`](stick/commands).
+[`src/stick/commands/`](src/stick/commands).
 
 1. On the computer with Claude Code, paste this into Claude Code:
 
    ```text
-   clone github.com/TaitoUnited/xone and copy its stick/commands folder to the usb stick named
+   clone github.com/TaitoUnited/xone and copy its src/stick/commands folder to the usb stick named
    SHARE as commands
    ```
 
@@ -102,7 +102,7 @@ Commit [a40a6ff](https://github.com/TaitoUnited/xone/commit/a40a6ff3742c5d2a4b3a
 on upstream commit 30317da added or changed these parts of four files; `/* ... */` stands for
 unchanged code left out.
 
-[`src/bus/protocol.c`](src/bus/protocol.c):
+[`src/xone/bus/protocol.c`](src/xone/bus/protocol.c):
 
 ```c
 if (ack->options & GIP_OPT_CHUNK)
@@ -110,7 +110,7 @@ if (ack->options & GIP_OPT_CHUNK)
 		__func__, pkt.command, len, le16_to_cpu(pkt.remaining));
 ```
 
-[`src/transport/dongle.c`](src/transport/dongle.c):
+[`src/xone/transport/dongle.c`](src/xone/transport/dongle.c):
 
 ```c
 #define XONE_DONGLE_STALE_CLIENT msecs_to_jiffies(1000)
@@ -163,7 +163,7 @@ if (!client) {
 client->last_rx = jiffies;
 ```
 
-[`src/transport/mt76.c`](src/transport/mt76.c):
+[`src/xone/transport/mt76.c`](src/xone/transport/mt76.c):
 
 ```c
 static uint fixed_channel;
@@ -192,7 +192,7 @@ if (fixed) {
 		 __func__, fixed_channel);
 ```
 
-[`src/transport/mt76.h`](src/transport/mt76.h):
+[`src/xone/transport/mt76.h`](src/xone/transport/mt76.h):
 
 ```c
 struct xone_mt76 {
@@ -205,9 +205,10 @@ struct xone_mt76 {
 
 ## License
 
-Code in [`src/`](src): `GPL-2.0-or-later`, as upstream's. A kernel module has to declare a
-GPL-compatible license for the kernel to link it to the USB functions it needs
-([license rules](https://docs.kernel.org/process/license-rules.html)). The scripts in
-[`stick/`](stick): `AGPL-3.0-or-later` ([stick/LICENSE](stick/LICENSE)), apart from the patch
-inside `install-xone.sh`, which is the code in `src/` and keeps its license. This README, the banner
-and the library art in `stick/commands/fix-art/`: `CC-BY-SA-4.0` ([LICENSE-PROSE](LICENSE-PROSE)).
+The driver in [`src/xone/`](src/xone): `GPL-2.0-or-later` ([LICENSE](LICENSE)), as upstream's. A
+kernel module has to declare a GPL-compatible license for the kernel to link it to the USB
+functions it needs ([license rules](https://docs.kernel.org/process/license-rules.html)). The
+scripts in [`src/stick/`](src/stick): `AGPL-3.0-or-later` ([src/stick/LICENSE](src/stick/LICENSE)),
+apart from the patch inside `install-xone.sh`, which is code from `src/xone/` and keeps its
+license. This README, the banner and the library art in `src/stick/commands/fix-art/`:
+`CC-BY-SA-4.0` ([LICENSE-PROSE](LICENSE-PROSE)).

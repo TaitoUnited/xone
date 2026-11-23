@@ -270,7 +270,7 @@ Please join the [Discord server](https://discord.gg/T3dSC3ReuS) in case of any o
 
 ## License
 
-`xone` is released under the [GNU General Public License, Version 2](../LICENSE).
+`xone` is released under the [GNU General Public License, Version 2](../../LICENSE).
 
 ```
 Copyright (C) 2021 Severin von Wnuck-Lipinski
