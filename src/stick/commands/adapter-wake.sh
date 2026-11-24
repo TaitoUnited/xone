@@ -5,6 +5,9 @@
 # switching (port<X>/disable in the kernel's
 # Documentation/ABI/testing/sysfs-bus-usb). The Steam Machine's own ports do
 # not (lsusb, 2026-11-16), so there it only reconnects the adapter.
+# When the adapter lost power in sleep and came back as a new USB device,
+# xone restarts once it runs: the firmware load at such a wake left it deaf to
+# pads, and xone's restart, which resets that firmware, cured it (2026-11-24).
 # xbox-adapter-wake.service runs this as root after each wake. With --now it
 # cuts the power at once, as a test, for 5 seconds or the seconds given after
 # it. install-xone.sh puts it in /etc/steambox.
@@ -51,6 +54,10 @@ bound() {
   [ "${link##*/}" = xone-dongle ]
 }
 pairing() { cat "$1/${1##*/}:1.0/pairing" 2>/dev/null; }
+clients() {
+  awk -F': *' '/Active clients/ {print $2; exit}' \
+    "$1/${1##*/}:1.0/active_clients" 2>/dev/null
+}
 kernel_since() { journalctl -k -q --no-pager -o cat --since "$1" 2>/dev/null; }
 # The device on a port folder such as usb1-port2 (1-2) or 1-2-port3 (1-2.3).
 child_of() {
@@ -59,6 +66,39 @@ child_of() {
     usb*) echo "${hub#usb}-$n" ;;
     *) echo "$hub.$n" ;;
   esac
+}
+
+restart_xone() {
+  local m at
+  at=$(date '+%Y-%m-%d %H:%M:%S')
+  for m in $(lsmod | awk '/^xone_gip_/ {print $1}') xone_dongle xone_wired xone_gip; do
+    lsmod | grep -q "^$m " || continue
+    if ! modprobe -r "$m"; then
+      echo "xone could not restart, as $m stayed loaded."
+      return 1
+    fi
+  done
+  if ! modprobe xone_dongle; then
+    echo "xone did not load again after its restart."
+    return 1
+  fi
+  # Pairing still runs from the wake until xone has taken the adapter again.
+  sleep 3
+  for _ in $(seq 25); do
+    adapter=$(find_adapter)
+    if [ -n "$adapter" ] && [ "$(pairing "$adapter")" = 1 ]; then
+      echo "xone restarted the adapter, so its light blinks and pads can join."
+      return 0
+    fi
+    if kernel_since "$at" | grep -qE "$fail_re"; then
+      echo "xone could not start the adapter after its restart." \
+        "Unplug it, wait 5 seconds and plug it back in."
+      return 1
+    fi
+    sleep 1
+  done
+  echo "xone did not start pairing in 25 seconds after its restart."
+  return 1
 }
 
 adapter=$(find_adapter)
@@ -107,6 +147,11 @@ if ! $now; then
     fi
     if [ $fine -ge 20 ]; then
       echo "The adapter answers on USB port ${adapter##*/} after the wake."
+      if grep -qE "$plug_re" <<<"$log" && [ "$(clients "$adapter")" = 0 ]; then
+        echo "It came back as a new USB device, so xone restarts."
+        restart_xone
+        exit
+      fi
       exit 0
     fi
     sleep 1

@@ -10,14 +10,30 @@
 #    comes back by a restart.
 # 4. It puts xone back after a SteamOS update, which ends in a restart.
 # 5. xone-debug.sh checks the adapter and has it plugged back in.
+# After each step, and when the stick goes in while the window waits, the
+# week's logs and reports and this window's text go to steambox-info/ on the
+# stick.
 # setup.sh copies this to ~/fix-xbox-controllers.sh.
 
-# The trap keeps the window open when Ctrl+C stops a restart countdown.
-trap : INT
+# A quit in Steam sends SIGINT. The trap keeps the window open when Ctrl+C
+# stops a restart countdown, and ends the closing wait.
+quit=""
+trap 'quit=1' INT
 unset LD_PRELOAD LD_LIBRARY_PATH
 cd "$HOME" || exit 1
 lib="$HOME/.local/share/steambox"
 stamp=$(date +%Y%m%d-%H%M%S)
+mkdir -p "$lib"
+
+# This window's text, kept across the restart into the updated copy. tee
+# ignores SIGINT so that a quit in Steam cannot cut the window off.
+if [ -z "${STEAMBOX_FIX_LOG:-}" ]; then
+  export STEAMBOX_FIX_LOG="$lib/fix-$stamp.log"
+  export PYTHONUNBUFFERED=1
+  exec > >(trap '' INT; exec tee -a "$STEAMBOX_FIX_LOG") 2>&1
+  export STEAMBOX_TEE=$!
+fi
+find "$lib" -maxdepth 1 -name 'fix-*.log' -mtime +30 -delete 2>/dev/null
 
 dev=$(readlink -f /dev/disk/by-label/SHARE 2>/dev/null)
 stick=""
@@ -29,6 +45,43 @@ if [ -b "$dev" ]; then
   fi
 fi
 
+# Copies the logs and reports of the last 7 days that the stick lacks, or
+# holds an older copy of, to steambox-info/ on it, with the kernel log of the
+# last day. A stick nothing had mounted is mounted for the copy only.
+logs_to_stick() {
+  local d target was f dest n=0
+  d=$(readlink -f /dev/disk/by-label/SHARE 2>/dev/null)
+  [ -b "$d" ] || return 1
+  was=$(lsblk -no MOUNTPOINT "$d" 2>/dev/null)
+  target=$was
+  if [ -z "$target" ] && udisksctl mount -b "$d" >/dev/null 2>&1; then
+    target=$(lsblk -no MOUNTPOINT "$d" 2>/dev/null)
+  fi
+  [ -n "$target" ] || return 1
+  if mkdir -p "$target/steambox-info/padlog"; then
+    while IFS= read -r f; do
+      dest="$target/steambox-info/${f#"$lib"/}"
+      [ -f "$dest" ] && [ "$(stat -c %s "$f")" = "$(stat -c %s "$dest")" ] &&
+        continue
+      cp -- "$f" "$dest" && n=$((n + 1))
+    done < <(
+      find "$lib" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.log' \) \
+        -mtime -7 2>/dev/null
+      find "$lib/padlog" -maxdepth 1 -type f -name 'events-*.log' -mtime -7 \
+        2>/dev/null
+    )
+    journalctl -k -q --no-pager -o short-precise --since '24 hours ago' \
+      >"$target/steambox-info/kernel-$stamp.log" 2>/dev/null
+    sync
+    echo "Copied $n logs and the kernel log to the stick at $(date +%T)."
+  fi
+  if [ -z "$was" ]; then
+    udisksctl unmount -b "$d" >/dev/null 2>&1
+    echo "The stick can come out now."
+  fi
+  return 0
+}
+
 # Steam counts Fix as running until every process started from it has ended,
 # such as a job's keyboard request, so those end here. Only when this program
 # leads its own process group, as Konsole starts it, never a shell's.
@@ -36,7 +89,7 @@ end_leftovers() {
   local p
   [ "$(ps -o pgid= -p $$ | tr -d ' ')" = "$$" ] || return 0
   for p in $(pgrep -g $$); do
-    [ "$p" = "$$" ] || kill "$p" 2>/dev/null
+    [ "$p" = "$$" ] || [ "$p" = "${STEAMBOX_TEE:-}" ] || kill "$p" 2>/dev/null
   done
 }
 
@@ -57,18 +110,36 @@ end_after_exit() {
 
 # $1 is how many seconds the window stays open.
 finish() {
+  local end plugged
   end_leftovers
+  echo
+  logs_to_stick | grep -v 'can come out'
   if [ -n "${STEAMBOX_UNMOUNT:-}" ]; then
     sync
     udisksctl unmount -b "$dev" >/dev/null 2>&1
   fi
-  echo
+  [ -e /dev/disk/by-label/SHARE ] && echo "The stick can come out now."
   if [ "$1" -ge 60 ]; then
     echo "This window closes by itself in $(($1 / 60)) minutes, or when you quit it in Steam."
+    [ -e /dev/disk/by-label/SHARE ] ||
+      echo "Plug in the stick meanwhile and the logs go on it."
   else
     echo "This window closes by itself in $1 seconds."
   fi
-  sleep "$1"
+  end=$((SECONDS + $1))
+  plugged=$([ -e /dev/disk/by-label/SHARE ] && echo 1)
+  while [ -z "$quit" ] && [ $SECONDS -lt $end ]; do
+    sleep 1
+    if [ -e /dev/disk/by-label/SHARE ]; then
+      if [ -z "$plugged" ]; then
+        # udisks may still be busy with the stick that just went in.
+        sleep 2
+        logs_to_stick && plugged=1
+      fi
+    else
+      plugged=""
+    fi
+  done
   end_after_exit
   exit 0
 }
@@ -94,6 +165,7 @@ if [ -n "$stick" ] && [ "${1:-}" != --updated ] &&
   fi
   echo
 fi
+logs_to_stick >/dev/null
 
 if [ -n "$stick" ] && [ -d "$stick/run" ]; then
   for job in "$stick"/run/*; do
@@ -128,10 +200,12 @@ library=$?
 echo
 
 sync
+logs_to_stick >/dev/null
 "$HOME/install-xone.sh" || finish 600
 echo
 
 if [ $library -eq 3 ]; then
+  logs_to_stick >/dev/null
   echo "The library entries change as the Steam Machine starts."
   restart
 fi

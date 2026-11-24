@@ -35,9 +35,12 @@ The office Steam Machine has no Claude Code: it runs SteamOS in Gaming Mode, so 
    `run/` once, moving it to `run/done/` with its output. It then reports the pads that dropped,
    builds xone with the patch in `install-xone.sh` again after a SteamOS update, checks the adapter
    and closes by itself. When it needs the deck password, Steam's on-screen keyboard opens, so a pad
-   can type it.
-6. Each run saves its reports to `steambox-info/` on the stick, which goes back to the computer
-   with Claude Code to be read.
+   can type it. It also installs `adapter-wake.sh`, which runs after each wake from sleep: it
+   reconnects an adapter that stopped answering, and restarts xone when the adapter lost power in
+   sleep, since the adapter then came back unable to hear any pad until xone restarted.
+6. While the stick is in, each run copies its reports, the week's logs, its own window text and
+   the kernel log of the last day to `steambox-info/` on the stick, also when the stick goes in
+   while the window waits. The stick then goes back to the computer with Claude Code to be read.
 
 ## License
 
